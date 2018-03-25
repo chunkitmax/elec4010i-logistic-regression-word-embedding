@@ -1,0 +1,5 @@
+runs*
+__pycache__
+*.gz
+*.txt
+w_emb*
