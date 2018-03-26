@@ -47,18 +47,18 @@ class Loader(DataLoader):
           _, sentiment, sentence = line.split('\t')
           words = self._clean_str(sentence).split()
           word_set = word_set.union(words)
-          # word_counter += Counter(words)
+          word_counter += Counter(words)
           self.x.append(words)
           self.y_.append([1. if sentiment == 'pos' else 0.])
           self.logger.d('Loader: Read %6d / %6d line'%(index+1, num_line))
 
       # Ultimately cleaning
-      num_line = len(self.x)
-      for index, sentence in enumerate(self.x):
-        s = self._deep_clean(word_set, sentence)
-        word_counter += Counter(s)
-        self.x[index] = s
-        self.logger.d('Loader: Deep cleaning %6d / %6d line'%(index+1, num_line))
+      # num_line = len(self.x)
+      # for index, sentence in enumerate(self.x):
+      #   s = self._deep_clean(word_set, sentence)
+      #   word_counter += Counter(s)
+      #   self.x[index] = s
+      #   self.logger.d('Loader: Deep cleaning %6d / %6d line'%(index+1, num_line))
 
       # Build word dictionary
       filter_words = [key for key, count in dict(word_counter).items() if count > 3]
