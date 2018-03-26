@@ -52,20 +52,10 @@ class Loader(DataLoader):
           self.y_.append([1. if sentiment == 'pos' else 0.])
           self.logger.d('Loader: Read %6d / %6d line'%(index+1, num_line))
 
-      # Ultimately cleaning
-      # num_line = len(self.x)
-      # for index, sentence in enumerate(self.x):
-      #   s = self._deep_clean(word_set, sentence)
-      #   word_counter += Counter(s)
-      #   self.x[index] = s
-      #   self.logger.d('Loader: Deep cleaning %6d / %6d line'%(index+1, num_line))
-
       # Build word dictionary
       filter_words = [key for key, count in dict(word_counter).items() if count > 3]
-      self.word_dict = {word: index+3 for index, word in enumerate(filter_words)}
+      self.word_dict = {word: index+1 for index, word in enumerate(filter_words)}
       # self.word_dict = {word: index+1 for index, word in enumerate(dict(word_counter))}
-      self.word_dict['</s>'] = 2
-      self.word_dict['<s>'] = 1
       self.word_dict['<unk>'] = 0
       self.word_counter = word_counter
       self.word_count = len(self.word_dict)
@@ -113,33 +103,6 @@ class Loader(DataLoader):
                       r' \1 ', string)
       string = re.sub(r'\s{2,}', ' ', string)
       return string.strip().lower()
-    def _deep_clean(self, word_set, words):
-      ret_words = []
-      for word in words:
-        trial_s = re.sub(r's|es', '', word)
-        trial_ing = word + 'g'
-        if re.match(r'[a-zA-Z]', word[-1]) is None:
-          trial_rep = False
-        else:
-          trial_rep = re.sub('('+word[-1]+')+$', r'\1', word)
-        if trial_s != word and trial_s in word_set:
-          ret_words.append(trial_s)
-          word_set.discard(word)
-        elif trial_rep != word and trial_rep and trial_rep in word_set:
-          ret_words.append(trial_rep)
-          word_set.discard(word)
-        elif trial_ing.endswith('ing') and trial_ing in word_set:
-          ret_words.append(trial_ing)
-          word_set.discard(word)
-        elif word.endswith('ed') and word[:-1] in word_set:
-          ret_words.append(word[:-1])
-          word_set.discard(word)
-        elif word.endswith('ed') and word[:-2] in word_set:
-          ret_words.append(word[:-2])
-          ret_words.append(word)
-        else:
-          ret_words.append(word)
-      return ret_words
     def _to_context_vec(self, word_seq):
       '''
       Convert sentence to context vectors
@@ -148,8 +111,6 @@ class Loader(DataLoader):
       target_word = []
       buffer_len = self.window_size*2+1
       window = deque(maxlen=buffer_len)
-      window.extend(['<s>', '<s>'])
-      word_seq += ['</s>', '</s>']
       for word in word_seq:
         window.append(word)
         if len(window) == buffer_len:
@@ -161,7 +122,7 @@ class Loader(DataLoader):
       return input_words, target_word
     def _get_nce_weight(self):
       '''
-      Detect phrases and combine words together
+      Get weight for generating noise
       '''
       power = .75
       dominator = sum(np.power(list(self.word_counter.values()), power))
@@ -169,7 +130,6 @@ class Loader(DataLoader):
       for word, count in self.word_counter.items():
         if word in self.word_dict.keys():
           freq_vec.append(math.pow(count, power) / dominator)
-      # freq_vec[0] = math.pow(unknown_word_freq, power) / dominator
       freq_vec[0] = np.mean(freq_vec)
       exp_x = np.exp(freq_vec - np.max(freq_vec))
       return exp_x / exp_x.sum()
@@ -188,5 +148,5 @@ class Loader(DataLoader):
     return self.dataset._to_word(index)
 
 if __name__ == '__main__':
-  LOADER = Loader(batch_size=50)
+  LOADER = Loader(batch_size=100)
   # print(next(LOADER))

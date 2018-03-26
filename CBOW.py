@@ -77,7 +77,8 @@ class CBOW(T.nn.Module):
     elif Path.exists(self.embedding_path):
       self.embeddings.weight.data.copy_(T.from_numpy(np.loadtxt(self.embedding_path)))
     if self.use_nce:
-      self.loss_fn = NCELoss(self.vocab_size, self.embedding_len, self.use_cuda, self.loader.get_nce_weight())
+      self.loss_fn = NCELoss(self.vocab_size, self.embedding_len, self.use_cuda,
+                             self.loader.get_nce_weight())
     else:
       self.fc = T.nn.Linear(self.embedding_len, self.vocab_size)
       self.fc.apply(init_weight)
@@ -120,7 +121,7 @@ class CBOW(T.nn.Module):
           if self.use_nce:
             output = self(context)
             acc = math.nan
-            loss = self.loss_fn(output, target, 20)
+            loss = self.loss_fn(output, target, 5)
           else:
             output, predicted = self(context)
             acc += (target.squeeze() == predicted).float().mean().data
