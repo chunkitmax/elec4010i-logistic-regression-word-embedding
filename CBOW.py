@@ -3,6 +3,7 @@ CBOW.py
 Train the network for word embedding
 '''
 import argparse
+import math
 import os.path as Path
 from collections import deque
 
@@ -11,6 +12,7 @@ import torch as T
 
 from loader import Loader
 from log import Logger
+from NCELoss import NCELoss
 
 parser = argparse.ArgumentParser()
 
@@ -21,9 +23,12 @@ parser.add_argument('-m', '--momentum', default=.9,
 parser.add_argument('-b', '--batch_size', default=50, type=int, help='Batch size [default: 50]')
 parser.add_argument('-e', '--epoch', default=1000, type=int, help='Number of epoch [default: 100]')
 parser.add_argument('-w', '--window_size', default=2, type=int, help='Window size [default: 2]')
-parser.add_argument('-em', '--emb_len', default=300, type=int, help='Embedding length [default: 300]')
+parser.add_argument('-em', '--emb_len', default=300, type=int,
+                    help='Embedding length [default: 300]')
 parser.add_argument('-g', '--gpu', default=False, action='store_true',
                     help='Use GPU [default: CPU]')
+parser.add_argument('-n', '--nce', default=False, action='store_true',
+                    help='Use nce loss func [default: False]')
 parser.add_argument('-v', '--verbose', default=1,
                     type=int, help='Verbosity 0/1: importantOnly/All [default: 1]')
 parser.add_argument('-emf', '--emb_file', default='w_emb_mat.txt',
@@ -40,7 +45,8 @@ Args = parser.parse_args()
 class CBOW(T.nn.Module):
   def __init__(self, embedding_len, lr=1., momentum=.9, batch_size=50,
                window_size=2, epoch=1, use_cuda=False, embedding_path=None,
-               verbose=1, tensorboard=False, wordlist_path=None, log_folder='runs'):
+               verbose=1, tensorboard=False, wordlist_path=None, log_folder='runs',
+               use_nce=False):
     super(CBOW, self).__init__()
     self.embedding_len = embedding_len
     self.lr = lr
@@ -50,6 +56,7 @@ class CBOW(T.nn.Module):
     self.embedding_path = embedding_path
     self.logger = Logger(verbose)
     self.tensorboard = tensorboard
+    self.use_nce = use_nce
     if self.tensorboard:
       from tensorboardX import SummaryWriter
       self.writer = SummaryWriter(log_folder)
@@ -69,9 +76,12 @@ class CBOW(T.nn.Module):
       self.embeddings.apply(init_weight)
     elif Path.exists(self.embedding_path):
       self.embeddings.weight.data.copy_(T.from_numpy(np.loadtxt(self.embedding_path)))
-    self.fc = T.nn.Linear(self.embedding_len, self.vocab_size)
-    self.fc.apply(init_weight)
-    self.loss_fn = T.nn.CrossEntropyLoss()
+    if self.use_nce:
+      self.loss_fn = NCELoss(self.vocab_size, self.embedding_len, self.use_cuda, self.loader.get_nce_weight())
+    else:
+      self.fc = T.nn.Linear(self.embedding_len, self.vocab_size)
+      self.fc.apply(init_weight)
+      self.loss_fn = T.nn.CrossEntropyLoss()
     if self.use_cuda:
       self.cuda()
     if self.momentum > 0.:
@@ -83,11 +93,14 @@ class CBOW(T.nn.Module):
     # self.optimizer = T.optim.Adam(self.parameters(), lr=.01)
   def forward(self, inputs):
     embeddings = self.embeddings(inputs)
-    sum_vector = embeddings.mean(dim=1)
-    output = self.fc(sum_vector)
-    # output = T.nn.functional.softmax(output, dim=1)
-    _, max_indice = T.max(output, dim=1)
-    return output, max_indice
+    if self.use_nce:
+      return embeddings
+    else:
+      sum_vector = embeddings.mean(dim=1)
+      output = self.fc(sum_vector)
+      # output = T.nn.functional.softmax(output, dim=1)
+      _, max_indice = T.max(output, dim=1)
+      return output, max_indice
   def fit(self):
     self.logger.i('Start training network...', True)
     try:
@@ -104,9 +117,14 @@ class CBOW(T.nn.Module):
           target = T.autograd.Variable(target)
           if self.use_cuda:
             context, target = context.cuda(), target.cuda()
-          output, predicted = self(context)
-          acc += (target.squeeze() == predicted).float().mean().data
-          loss = self.loss_fn(output, target.view(-1))
+          if self.use_nce:
+            output = self(context)
+            acc = math.nan
+            loss = self.loss_fn(output, target, 20)
+          else:
+            output, predicted = self(context)
+            acc += (target.squeeze() == predicted).float().mean().data
+            loss = self.loss_fn(output, target.view(-1))
           self.optimizer.zero_grad()
           loss.backward()
           self.optimizer.step()
@@ -149,7 +167,7 @@ if __name__ == '__main__':
   model = CBOW(Args.emb_len, lr=Args.learning_rate, momentum=Args.momentum, epoch=Args.epoch,
                batch_size=Args.batch_size, window_size=Args.window_size, use_cuda=Args.gpu,
                embedding_path=Args.emb_file, verbose=Args.verbose, tensorboard=Args.tensorboard,
-               wordlist_path=Args.wordlist_file, log_folder=Args.log_folder)
+               wordlist_path=Args.wordlist_file, log_folder=Args.log_folder, use_nce=Args.nce)
   model.fit()
   # model = CBOW(5, epoch=50000, use_cuda=True, embedding_path='w_emb_mat.txt')
   print(model.get_similarity('king', 'queen'))

@@ -159,21 +159,20 @@ class Loader(DataLoader):
           input_words.append(T.LongTensor(tmp_window))
           target_word.append(T.LongTensor([target]))
       return input_words, target_word
-    def _phrase_detect(self):
+    def _get_nce_weight(self):
       '''
       Detect phrases and combine words together
       '''
       power = .75
       dominator = sum(np.power(list(self.word_counter.values()), power))
-      freq_vec = [0.]
-      unknown_word_freq = 0
+      freq_vec = [0., 0., 0.]
       for word, count in self.word_counter.items():
         if word in self.word_dict.keys():
           freq_vec.append(math.pow(count, power) / dominator)
-        else:
-          unknown_word_freq += count
-      freq_vec[0] = math.pow(unknown_word_freq, power) / dominator
-      return freq_vec
+      # freq_vec[0] = math.pow(unknown_word_freq, power) / dominator
+      freq_vec[0] = np.mean(freq_vec)
+      exp_x = np.exp(freq_vec - np.max(freq_vec))
+      return exp_x / exp_x.sum()
   def __init__(self, window_size=2, batch_size=50, for_embedding=False,
                filename='twitter_sentiment.csv.gz', logger=None, wordlist_file=None):
     dataset = self.Data(filename=filename, for_embedding=for_embedding,
@@ -181,13 +180,13 @@ class Loader(DataLoader):
     super().__init__(dataset, batch_size=batch_size, shuffle=True)
   def get_vocab_size(self):
     return self.dataset.word_count
-  def get_freq_vec(self):
-    return self.dataset._phrase_detect()
+  def get_nce_weight(self):
+    return self.dataset._get_nce_weight()
   def to_index(self, word):
     return self.dataset._to_index(word)
   def to_word(self, index):
     return self.dataset._to_word(index)
 
 if __name__ == '__main__':
-  LOADER = Loader(batch_size=5)
-  print(next(LOADER))
+  LOADER = Loader(batch_size=50)
+  # print(next(LOADER))
