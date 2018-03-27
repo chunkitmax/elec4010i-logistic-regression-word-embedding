@@ -3,3 +3,4 @@ __pycache__
 *.gz
 *.txt
 w_emb*
+logs*

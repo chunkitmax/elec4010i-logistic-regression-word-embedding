@@ -155,7 +155,9 @@ class CBOW(T.nn.Module):
     np.savetxt(self.embedding_path, embeds)
     if self.tensorboard:
       self.writer.add_embedding(self.embeddings.weight.data,
-                                self.loader.dataset.word_dict.keys(),
+                                [key for key, value in \
+                                 sorted(self.loader.dataset.word_dict.items(),
+                                 key=lambda x: x[1])],
                                 global_step=global_step)
   def get_word_embedding(self, word):
     return self.embeddings.weight.data[self.loader.to_index(word)]

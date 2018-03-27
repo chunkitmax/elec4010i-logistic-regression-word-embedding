@@ -35,7 +35,8 @@ class NCELoss(T.nn.Module):
 
     if self.use_cuda:
       noise = noise.cuda()
-    noise = self.output_embedding(noise).neg()
+    noise = self.output_embedding(noise)
+    noise = noise.neg()
 
     log_target = (input_vec * output_vec).sum(1).squeeze().sigmoid().log()
     sum_log_noise = T.bmm(noise, input_vec.unsqueeze(2)).sigmoid().log().sum(1).squeeze()

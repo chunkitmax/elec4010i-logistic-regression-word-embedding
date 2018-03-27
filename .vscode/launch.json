@@ -37,7 +37,23 @@
         "--momentum=0.5",
         "--gpu",
         "--tensorboard",
-        "--nce"
+        "--nce",
+        "--emb_file=w_emb_mat_o_01_5_300_50_2_nce",
+        "--log_folder=runs_o_01_5_50_100_2_nce"
+      ]
+    },
+    {
+      "name": "Python: Classifier",
+      "type": "python",
+      "request": "launch",
+      "stopOnEntry": false,
+      "pythonPath": "${config:python.pythonPath}",
+      "program": "${workspaceFolder}/logistic_regression_word_emb.py",
+      "cwd": "${workspaceFolder}",
+      "env": {},
+      "envFile": "${workspaceFolder}/.env",
+      "debugOptions": [
+        "RedirectOutput"
       ]
     }
   ]

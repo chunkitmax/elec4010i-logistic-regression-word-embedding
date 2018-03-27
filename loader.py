@@ -32,24 +32,27 @@ class Loader(DataLoader):
         self.logger = logger
       self.logger.i('Initializing Loader....')
 
-      self.x = [] # Input
+      x = [] # Input
+      self.x = []
       self.y_ = [] # Ground truth
       self.context_vec = []
       self.target_word = []
+      self.max_sentence_len = 0
       word_set = set()
       word_counter = Counter()
 
       # Read labelled data from file
       with gzip.open(filename, 'rt') as dfile:
-        lines = dfile.readlines()[1:20001]
+        lines = dfile.readlines()[1:]
         num_line = len(lines)
         for index, line in enumerate(lines):
           _, sentiment, sentence = line.split('\t')
           words = self._clean_str(sentence).split()
+          self.max_sentence_len = np.max([self.max_sentence_len, len(words)])
           word_set = word_set.union(words)
           word_counter += Counter(words)
-          self.x.append(words)
-          self.y_.append([1. if sentiment == 'pos' else 0.])
+          x.append(words)
+          self.y_.append(T.LongTensor([1 if sentiment == 'pos' else 0]))
           self.logger.d('Loader: Read %6d / %6d line'%(index+1, num_line))
 
       # Build word dictionary
@@ -61,10 +64,14 @@ class Loader(DataLoader):
       self.word_count = len(self.word_dict)
 
       if for_embedding:
-        for word_seq in self.x:
+        for word_seq in x:
           words, target = self._to_context_vec(word_seq)
           self.context_vec.extend(words)
           self.target_word.extend(target)
+      else:
+        for word_seq in x:
+          self.x.append([self._to_index(word) for word in word_seq])
+        del x
       self.len = len(self.x)
       if wordlist_file is not None:
         with open(wordlist_file, 'w+') as wlfile:
@@ -86,6 +93,8 @@ class Loader(DataLoader):
         return self.context_vec[index], self.target_word[index]
       else:
         return self.x[index], self.y_[index]
+    def _get_max_sentence_len(self):
+      return self.max_sentence_len
     def __len__(self):
       if self.for_embedding:
         return len(self.context_vec)
@@ -126,7 +135,7 @@ class Loader(DataLoader):
       '''
       power = .75
       dominator = sum(np.power(list(self.word_counter.values()), power))
-      freq_vec = [0., 0., 0.]
+      freq_vec = [0.]
       for word, count in self.word_counter.items():
         if word in self.word_dict.keys():
           freq_vec.append(math.pow(count, power) / dominator)
@@ -142,6 +151,8 @@ class Loader(DataLoader):
     return self.dataset.word_count
   def get_nce_weight(self):
     return self.dataset._get_nce_weight()
+  def get_max_sentence_len(self):
+    return self.dataset._get_max_sentence_len()
   def to_index(self, word):
     return self.dataset._to_index(word)
   def to_word(self, index):
